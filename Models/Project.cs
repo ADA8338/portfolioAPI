@@ -5,31 +5,20 @@ namespace PortfolioAPI.Models
 {
     public class Project
     {
-        // Primary Key
+        [Key]
         public int Id { get; set; }
 
-        // Project title (required)
         [Required]
-        [MaxLength(200)]
-        public string Title { get; set; } = string.Empty;
+        public string Title { get; set; }
 
-        // Short description
-        [MaxLength(1000)]
-        public string Description { get; set; } = string.Empty;
+        public string Description { get; set; }
 
-        // Technologies used (YOLOv8, .NET, React, etc.)
-        [MaxLength(300)]
-        public string TechStack { get; set; } = string.Empty;
+        public string TechStack { get; set; }
 
-        // GitHub repository link
-        [Url]
-        public string GitHubUrl { get; set; } = string.Empty;
+        public string GithubUrl { get; set; }
 
-        // Live demo URL (optional)
-        [Url]
-        public string LiveUrl { get; set; } = string.Empty;
+        public string LiveUrl { get; set; }
 
-        // When project was added
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
