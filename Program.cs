@@ -1,30 +1,59 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add controller support
-builder.Services.AddControllers();
+#region LOGGING
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+#endregion
 
-// Enable CORS (required for frontend → backend calls)
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowAll", policy =>
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader());
-});
+#region SERVICES
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+#endregion
 
 var app = builder.Build();
 
-// Use CORS
-app.UseCors("AllowAll");
+#region MIDDLEWARE
 
-// Map controllers
+// Global request logging
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+    logger.LogInformation(
+        "Incoming request: {Method} {Path}",
+        context.Request.Method,
+        context.Request.Path
+    );
+
+    await next();
+
+    logger.LogInformation(
+        "Response status: {StatusCode}",
+        context.Response.StatusCode
+    );
+});
+
+app.UseRouting();
+app.UseAuthorization();
+
+#endregion
+
+#region ENDPOINTS
 app.MapControllers();
 
-// Health check / root endpoint
-app.MapGet("/", () => "Portfolio API is running ");
+// Root endpoint (optional)
+app.MapGet("/", () => Results.Ok(new
+{
+    service = "Portfolio API",
+    status = "Running",
+    environment = app.Environment.EnvironmentName
+}));
+#endregion
 
 app.Run();
