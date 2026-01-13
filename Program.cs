@@ -1,49 +1,63 @@
 using Microsoft.EntityFrameworkCore;
-using PortfolioAPI;
+using PortfolioAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 🔹 Read DATABASE_URL from Render
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+// ==============================
+// Database configuration
+// ==============================
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-if (string.IsNullOrEmpty(databaseUrl))
+// If running on Render, use DATABASE_URL
+if (string.IsNullOrEmpty(connectionString))
 {
-    throw new Exception("DATABASE_URL environment variable is not set.");
+    var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+
+    if (!string.IsNullOrEmpty(databaseUrl))
+    {
+        // Convert DATABASE_URL to Npgsql format
+        var uri = new Uri(databaseUrl);
+        var userInfo = uri.UserInfo.Split(':');
+
+        connectionString =
+            $"Host={uri.Host};" +
+            $"Port={uri.Port};" +
+            $"Database={uri.AbsolutePath.Trim('/')};" +
+            $"Username={userInfo[0]};" +
+            $"Password={userInfo[1]};" +
+            $"SSL Mode=Require;Trust Server Certificate=true";
+    }
 }
 
-// 🔹 Convert Render Postgres URL to Npgsql format
-var uri = new Uri(databaseUrl);
-var userInfo = uri.UserInfo.Split(':');
-
-var connectionString =
-    $"Host={uri.Host};" +
-    $"Port={uri.Port};" +
-    $"Database={uri.AbsolutePath.Trim('/')};" +
-    $"Username={userInfo[0]};" +
-    $"Password={userInfo[1]};" +
-    $"SSL Mode=Require;Trust Server Certificate=true";
-
-// 🔹 Register DbContext
+// Register DbContext
 builder.Services.AddDbContext<PortfolioDbContext>(options =>
-    options.UseNpgsql(connectionString));
+    options.UseNpgsql(connectionString)
+);
 
-// 🔹 Controllers & Swagger
+// ==============================
+// Services
+// ==============================
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// 🔹 Swagger only for API testing (safe in Render)
+// ==============================
+// Middleware
+// ==============================
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// 🔹 Routing
+app.UseHttpsRedirection();
 app.UseAuthorization();
+
 app.MapControllers();
 
-// 🔹 Health check
-app.MapGet("/health", () => new
+// ==============================
+// Health check endpoint
+// ==============================
+app.MapGet("/", () => new
 {
     service = "Portfolio API",
     status = "Running",
