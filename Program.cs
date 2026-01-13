@@ -1,47 +1,30 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// --------------------
-// Services
-// --------------------
-
+// Add controller support
 builder.Services.AddControllers();
 
-// Swagger (simple & stable)
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
-// CORS for GitHub Pages
+// Enable CORS (required for frontend → backend calls)
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowGithub", policy =>
-    {
-        policy
-            .WithOrigins("https://ada8338.github.io")
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
+    options.AddPolicy("AllowAll", policy =>
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader());
 });
 
 var app = builder.Build();
 
-// --------------------
-// Middleware
-// --------------------
+// Use CORS
+app.UseCors("AllowAll");
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-// OPTIONAL: comment if HTTPS warning appears
-// app.UseHttpsRedirection();
-
-app.UseCors("AllowGithub");
-
+// Map controllers
 app.MapControllers();
 
-// Root endpoint (avoid 404)
-app.MapGet("/", () => "Portfolio API is running 🚀");
+// Health check / root endpoint
+app.MapGet("/", () => "Portfolio API is running ");
 
 app.Run();
