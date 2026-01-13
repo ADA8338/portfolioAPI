@@ -10,7 +10,6 @@ namespace PortfolioAPI.Data
         {
         }
 
-        // 🔹 Tables
         public DbSet<Project> Projects { get; set; }
     }
 }
