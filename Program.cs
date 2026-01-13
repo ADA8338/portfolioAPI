@@ -3,26 +3,30 @@ using PortfolioAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services
+// Services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 🔹 READ DATABASE_URL FROM RENDER
+// 🔹 Read DATABASE_URL
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-if (string.IsNullOrEmpty(databaseUrl))
+if (string.IsNullOrWhiteSpace(databaseUrl))
 {
     throw new Exception("DATABASE_URL environment variable is not set.");
 }
 
-// 🔹 Convert DATABASE_URL → Npgsql connection string
+// 🔹 Parse DATABASE_URL safely
 var uri = new Uri(databaseUrl);
 var userInfo = uri.UserInfo.Split(':');
 
+// 🔹 FIX: Handle missing port
+var port = uri.Port > 0 ? uri.Port : 5432;
+
+// 🔹 Build Npgsql connection string
 var connectionString =
     $"Host={uri.Host};" +
-    $"Port={uri.Port};" +
+    $"Port={port};" +
     $"Database={uri.AbsolutePath.Trim('/')};" +
     $"Username={userInfo[0]};" +
     $"Password={userInfo[1]};" +
@@ -35,7 +39,7 @@ builder.Services.AddDbContext<PortfolioDbContext>(options =>
 
 var app = builder.Build();
 
-// 🔹 Auto-create database tables
+// 🔹 Auto-create tables
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PortfolioDbContext>();
