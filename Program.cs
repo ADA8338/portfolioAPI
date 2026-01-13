@@ -1,51 +1,53 @@
 using Microsoft.EntityFrameworkCore;
-using PortfolioAPI.Data;
+using PortfolioAPI;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ---------- DATABASE ----------
+// 🔹 Read DATABASE_URL from Render
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-builder.Services.AddDbContext<PortfolioDbContext>(options =>
+if (string.IsNullOrEmpty(databaseUrl))
 {
-    options.UseNpgsql(databaseUrl);
-});
+    throw new Exception("DATABASE_URL environment variable is not set.");
+}
 
-// ---------- SERVICES ----------
+// 🔹 Convert Render Postgres URL to Npgsql format
+var uri = new Uri(databaseUrl);
+var userInfo = uri.UserInfo.Split(':');
+
+var connectionString =
+    $"Host={uri.Host};" +
+    $"Port={uri.Port};" +
+    $"Database={uri.AbsolutePath.Trim('/')};" +
+    $"Username={userInfo[0]};" +
+    $"Password={userInfo[1]};" +
+    $"SSL Mode=Require;Trust Server Certificate=true";
+
+// 🔹 Register DbContext
+builder.Services.AddDbContext<PortfolioDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
+// 🔹 Controllers & Swagger
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// ---------- MIDDLEWARE ----------
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// 🔹 Swagger only for API testing (safe in Render)
+app.UseSwagger();
+app.UseSwaggerUI();
 
-app.UseHttpsRedirection();
+// 🔹 Routing
+app.UseAuthorization();
+app.MapControllers();
 
-// ---------- HEALTH ----------
-app.MapGet("/", () => new
+// 🔹 Health check
+app.MapGet("/health", () => new
 {
     service = "Portfolio API",
     status = "Running",
     environment = app.Environment.EnvironmentName
-});
-
-app.MapGet("/api/health", () => Results.Ok("Healthy"));
-
-// ---------- API ENDPOINTS ----------
-app.MapGet("/api/projects", async (PortfolioDbContext db) =>
-    await db.Projects.OrderByDescending(p => p.CreatedAt).ToListAsync()
-);
-
-app.MapPost("/api/projects", async (PortfolioDbContext db, PortfolioAPI.Models.Project project) =>
-{
-    db.Projects.Add(project);
-    await db.SaveChangesAsync();
-    return Results.Created($"/api/projects/{project.Id}", project);
 });
 
 app.Run();
