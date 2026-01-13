@@ -3,43 +3,31 @@ using PortfolioAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Services
+// Add services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 🔹 Read DATABASE_URL
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
-
-if (string.IsNullOrWhiteSpace(databaseUrl))
+// 🔓 CORS (Allow frontend access)
+builder.Services.AddCors(options =>
 {
-    throw new Exception("DATABASE_URL environment variable is not set.");
-}
+    options.AddPolicy("AllowAll",
+        policy =>
+        {
+            policy.AllowAnyOrigin()
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+});
 
-// 🔹 Parse DATABASE_URL safely
-var uri = new Uri(databaseUrl);
-var userInfo = uri.UserInfo.Split(':');
-
-// 🔹 FIX: Handle missing port
-var port = uri.Port > 0 ? uri.Port : 5432;
-
-// 🔹 Build Npgsql connection string
-var connectionString =
-    $"Host={uri.Host};" +
-    $"Port={port};" +
-    $"Database={uri.AbsolutePath.Trim('/')};" +
-    $"Username={userInfo[0]};" +
-    $"Password={userInfo[1]};" +
-    $"SSL Mode=Require;Trust Server Certificate=true";
-
-// 🔹 Register DbContext
+// Database (PostgreSQL)
 builder.Services.AddDbContext<PortfolioDbContext>(options =>
-    options.UseNpgsql(connectionString)
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
 );
 
 var app = builder.Build();
 
-// 🔹 Auto-create tables
+// Auto-create database tables
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PortfolioDbContext>();
@@ -47,8 +35,14 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Middleware
-app.UseSwagger();
-app.UseSwaggerUI();
+if (app.Environment.IsDevelopment() || app.Environment.IsProduction())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+// 🔓 Enable CORS
+app.UseCors("AllowAll");
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
