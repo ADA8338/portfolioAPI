@@ -1,59 +1,51 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using PortfolioAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-#region LOGGING
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole();
-builder.Logging.AddDebug();
-#endregion
+// ---------- DATABASE ----------
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
-#region SERVICES
-builder.Services.AddControllers();
+builder.Services.AddDbContext<PortfolioDbContext>(options =>
+{
+    options.UseNpgsql(databaseUrl);
+});
+
+// ---------- SERVICES ----------
 builder.Services.AddEndpointsApiExplorer();
-#endregion
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-#region MIDDLEWARE
-
-// Global request logging
-app.Use(async (context, next) =>
+// ---------- MIDDLEWARE ----------
+if (app.Environment.IsDevelopment())
 {
-    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
-    logger.LogInformation(
-        "Incoming request: {Method} {Path}",
-        context.Request.Method,
-        context.Request.Path
-    );
+app.UseHttpsRedirection();
 
-    await next();
-
-    logger.LogInformation(
-        "Response status: {StatusCode}",
-        context.Response.StatusCode
-    );
-});
-
-app.UseRouting();
-app.UseAuthorization();
-
-#endregion
-
-#region ENDPOINTS
-app.MapControllers();
-
-// Root endpoint (optional)
-app.MapGet("/", () => Results.Ok(new
+// ---------- HEALTH ----------
+app.MapGet("/", () => new
 {
     service = "Portfolio API",
     status = "Running",
     environment = app.Environment.EnvironmentName
-}));
-#endregion
+});
+
+app.MapGet("/api/health", () => Results.Ok("Healthy"));
+
+// ---------- API ENDPOINTS ----------
+app.MapGet("/api/projects", async (PortfolioDbContext db) =>
+    await db.Projects.OrderByDescending(p => p.CreatedAt).ToListAsync()
+);
+
+app.MapPost("/api/projects", async (PortfolioDbContext db, PortfolioAPI.Models.Project project) =>
+{
+    db.Projects.Add(project);
+    await db.SaveChangesAsync();
+    return Results.Created($"/api/projects/{project.Id}", project);
+});
 
 app.Run();
