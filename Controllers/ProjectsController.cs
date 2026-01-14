@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PortfolioAPI.Data;
+using PortfolioAPI.DTOs;
 using PortfolioAPI.Models;
 
 namespace PortfolioAPI.Controllers
@@ -16,92 +17,87 @@ namespace PortfolioAPI.Controllers
             _context = context;
         }
 
-        // GET: api/projects
+        // GET: api/projects?page=1&pageSize=5
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Project>>> GetProjects()
+        public async Task<IActionResult> GetProjects(int page = 1, int pageSize = 5)
         {
-            return await _context.Projects
+            var total = await _context.Projects.CountAsync();
+
+            var projects = await _context.Projects
                 .OrderByDescending(p => p.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
+
+            return Ok(new
+            {
+                total,
+                page,
+                pageSize,
+                data = projects
+            });
         }
 
-        // GET: api/projects/{id}
+        // GET: api/projects/5
         [HttpGet("{id}")]
-        public async Task<ActionResult<Project>> GetProject(int id)
+        public async Task<IActionResult> GetProject(int id)
         {
             var project = await _context.Projects.FindAsync(id);
-
             if (project == null)
-            {
-                return NotFound();
-            }
+                return NotFound(new { message = "Project not found" });
 
-            return project;
+            return Ok(project);
         }
 
         // POST: api/projects
         [HttpPost]
-        public async Task<ActionResult<Project>> CreateProject(Project project)
+        public async Task<IActionResult> CreateProject(ProjectCreateDto dto)
         {
-            project.CreatedAt = DateTime.UtcNow;
+            var project = new Project
+            {
+                Title = dto.Title,
+                Description = dto.Description,
+                TechStack = dto.TechStack,
+                GithubUrl = dto.GithubUrl,
+                LiveUrl = dto.LiveUrl
+            };
 
             _context.Projects.Add(project);
             await _context.SaveChangesAsync();
 
-            return CreatedAtAction(
-                nameof(GetProject),
-                new { id = project.Id },
-                project
-            );
+            return CreatedAtAction(nameof(GetProject), new { id = project.Id }, project);
         }
 
-        // PUT: api/projects/{id}
+        // PUT: api/projects/5
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProject(int id, Project project)
+        public async Task<IActionResult> UpdateProject(int id, ProjectUpdateDto dto)
         {
-            if (id != project.Id)
-            {
-                return BadRequest("Project ID mismatch");
-            }
+            var project = await _context.Projects.FindAsync(id);
+            if (project == null)
+                return NotFound(new { message = "Project not found" });
 
-            _context.Entry(project).State = EntityState.Modified;
+            project.Title = dto.Title;
+            project.Description = dto.Description;
+            project.TechStack = dto.TechStack;
+            project.GithubUrl = dto.GithubUrl;
+            project.LiveUrl = dto.LiveUrl;
 
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!ProjectExists(id))
-                {
-                    return NotFound();
-                }
-                throw;
-            }
-
-            return NoContent();
+            await _context.SaveChangesAsync();
+            return Ok(project);
         }
 
-        // DELETE: api/projects/{id}
+        // DELETE: api/projects/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProject(int id)
         {
             var project = await _context.Projects.FindAsync(id);
-
             if (project == null)
-            {
-                return NotFound();
-            }
+                return NotFound(new { message = "Project not found" });
 
             _context.Projects.Remove(project);
             await _context.SaveChangesAsync();
 
             return NoContent();
-        }
-
-        private bool ProjectExists(int id)
-        {
-            return _context.Projects.Any(e => e.Id == id);
         }
     }
 }
