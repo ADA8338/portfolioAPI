@@ -1,8 +1,5 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using PortfolioAPI.Data;
-using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,48 +10,29 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Database
-builder.Services.AddDbContext<PortfolioDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-);
+// ================= DATABASE =================
+// Works locally + on Render
+var connectionString =
+    builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? builder.Configuration["DATABASE_URL"];
 
-// JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "THIS_IS_A_VERY_SECRET_KEY_12345";
-
-builder.Services.AddAuthentication(options =>
+if (!string.IsNullOrEmpty(connectionString))
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-})
-.AddJwtBearer(options =>
+    builder.Services.AddDbContext<PortfolioDbContext>(options =>
+        options.UseNpgsql(connectionString));
+}
+else
 {
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = false,
-        ValidateAudience = false,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(
-            Encoding.UTF8.GetBytes(jwtKey)
-        )
-    };
-});
+    Console.WriteLine("⚠️ Database connection string not found");
+}
 
 var app = builder.Build();
 
-// Auto-create DB tables (SAFE for Render)
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<PortfolioDbContext>();
-    db.Database.EnsureCreated();
-}
-
-// Middleware
+// ================= MIDDLEWARE =================
 app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
-app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
