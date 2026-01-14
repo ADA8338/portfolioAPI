@@ -1,102 +1,66 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PortfolioAPI.Data;
-using PortfolioAPI.DTOs;
 using PortfolioAPI.Models;
 
 namespace PortfolioAPI.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/projects")]
     public class ProjectsController : ControllerBase
     {
-        private readonly PortfolioDbContext _context;
+        private readonly PortfolioDbContext _db;
 
-        public ProjectsController(PortfolioDbContext context)
+        public ProjectsController(PortfolioDbContext db)
         {
-            _context = context;
+            _db = db;
         }
 
-        // GET: api/projects?page=1&pageSize=5
+        // PUBLIC
+        [AllowAnonymous]
         [HttpGet]
-        public async Task<IActionResult> GetProjects(int page = 1, int pageSize = 5)
+        public async Task<IActionResult> GetAll()
         {
-            var total = await _context.Projects.CountAsync();
-
-            var projects = await _context.Projects
-                .OrderByDescending(p => p.CreatedAt)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
-
-            return Ok(new
-            {
-                total,
-                page,
-                pageSize,
-                data = projects
-            });
+            return Ok(await _db.Projects.ToListAsync());
         }
 
-        // GET: api/projects/5
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetProject(int id)
-        {
-            var project = await _context.Projects.FindAsync(id);
-            if (project == null)
-                return NotFound(new { message = "Project not found" });
-
-            return Ok(project);
-        }
-
-        // POST: api/projects
+        // ADMIN ONLY
+        [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<IActionResult> CreateProject(ProjectCreateDto dto)
+        public async Task<IActionResult> Create(Project project)
         {
-            var project = new Project
-            {
-                Title = dto.Title,
-                Description = dto.Description,
-                TechStack = dto.TechStack,
-                GithubUrl = dto.GithubUrl,
-                LiveUrl = dto.LiveUrl
-            };
-
-            _context.Projects.Add(project);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetProject), new { id = project.Id }, project);
-        }
-
-        // PUT: api/projects/5
-        [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateProject(int id, ProjectUpdateDto dto)
-        {
-            var project = await _context.Projects.FindAsync(id);
-            if (project == null)
-                return NotFound(new { message = "Project not found" });
-
-            project.Title = dto.Title;
-            project.Description = dto.Description;
-            project.TechStack = dto.TechStack;
-            project.GithubUrl = dto.GithubUrl;
-            project.LiveUrl = dto.LiveUrl;
-
-            await _context.SaveChangesAsync();
+            _db.Projects.Add(project);
+            await _db.SaveChangesAsync();
             return Ok(project);
         }
 
-        // DELETE: api/projects/5
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteProject(int id)
+        [Authorize(Roles = "Admin")]
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(int id, Project project)
         {
-            var project = await _context.Projects.FindAsync(id);
-            if (project == null)
-                return NotFound(new { message = "Project not found" });
+            var existing = await _db.Projects.FindAsync(id);
+            if (existing == null) return NotFound();
 
-            _context.Projects.Remove(project);
-            await _context.SaveChangesAsync();
+            existing.Title = project.Title;
+            existing.Description = project.Description;
+            existing.TechStack = project.TechStack;
+            existing.GithubUrl = project.GithubUrl;
+            existing.LiveUrl = project.LiveUrl;
 
+            await _db.SaveChangesAsync();
+            return Ok(existing);
+        }
+
+        [Authorize(Roles = "Admin")]
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var project = await _db.Projects.FindAsync(id);
+            if (project == null) return NotFound();
+
+            _db.Projects.Remove(project);
+            await _db.SaveChangesAsync();
             return NoContent();
         }
     }
