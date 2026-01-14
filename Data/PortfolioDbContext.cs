@@ -8,7 +8,6 @@ namespace PortfolioAPI.Data
         public PortfolioDbContext(DbContextOptions<PortfolioDbContext> options)
             : base(options) { }
 
-        public DbSet<Project> Projects => Set<Project>();
-        public DbSet<Admin> Admins => Set<Admin>();
+        public DbSet<Project> Projects { get; set; }
     }
 }
