@@ -5,6 +5,7 @@ using PortfolioAPI.Data;
 using PortfolioAPI.Models;
 using System.Text;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Services
