@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PortfolioAPI.Data;
@@ -7,60 +6,61 @@ using PortfolioAPI.Models;
 namespace PortfolioAPI.Controllers
 {
     [ApiController]
-    [Route("api/projects")]
+    [Route("api/[controller]")]
     public class ProjectsController : ControllerBase
     {
-        private readonly PortfolioDbContext _db;
+        private readonly PortfolioDbContext _context;
 
-        public ProjectsController(PortfolioDbContext db)
+        public ProjectsController(PortfolioDbContext context)
         {
-            _db = db;
+            _context = context;
         }
 
-        // PUBLIC
-        [AllowAnonymous]
+        // GET: api/projects
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetProjects()
         {
-            return Ok(await _db.Projects.ToListAsync());
+            return Ok(await _context.Projects.ToListAsync());
         }
 
-        // ADMIN ONLY
-        [Authorize(Roles = "Admin")]
-        [HttpPost]
-        public async Task<IActionResult> Create(Project project)
+        // GET: api/projects/5
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetProject(int id)
         {
-            _db.Projects.Add(project);
-            await _db.SaveChangesAsync();
+            var project = await _context.Projects.FindAsync(id);
+            if (project == null) return NotFound();
             return Ok(project);
         }
 
-        [Authorize(Roles = "Admin")]
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, Project project)
+        // POST: api/projects
+        [HttpPost]
+        public async Task<IActionResult> CreateProject(Project project)
         {
-            var existing = await _db.Projects.FindAsync(id);
-            if (existing == null) return NotFound();
-
-            existing.Title = project.Title;
-            existing.Description = project.Description;
-            existing.TechStack = project.TechStack;
-            existing.GithubUrl = project.GithubUrl;
-            existing.LiveUrl = project.LiveUrl;
-
-            await _db.SaveChangesAsync();
-            return Ok(existing);
+            _context.Projects.Add(project);
+            await _context.SaveChangesAsync();
+            return CreatedAtAction(nameof(GetProject), new { id = project.Id }, project);
         }
 
-        [Authorize(Roles = "Admin")]
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
+        // PUT: api/projects/5
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateProject(int id, Project project)
         {
-            var project = await _db.Projects.FindAsync(id);
+            if (id != project.Id) return BadRequest();
+
+            _context.Entry(project).State = EntityState.Modified;
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
+
+        // DELETE: api/projects/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteProject(int id)
+        {
+            var project = await _context.Projects.FindAsync(id);
             if (project == null) return NotFound();
 
-            _db.Projects.Remove(project);
-            await _db.SaveChangesAsync();
+            _context.Projects.Remove(project);
+            await _context.SaveChangesAsync();
             return NoContent();
         }
     }
