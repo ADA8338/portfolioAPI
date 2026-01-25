@@ -1,35 +1,47 @@
 using Microsoft.EntityFrameworkCore;
-using PortfolioAPI.Data; // adjust namespace if needed
+using PortfolioAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 🔑 Get connection string from Render ENV VAR
+// --------------------------------------------------
+// DATABASE CONNECTION
+// --------------------------------------------------
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-if (string.IsNullOrEmpty(connectionString))
+if (string.IsNullOrWhiteSpace(connectionString))
 {
-    throw new Exception("Database connection string is missing.");
+    throw new Exception("❌ DefaultConnection string is missing");
 }
 
-// ✅ PostgreSQL configuration
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString));
+builder.Services.AddDbContext<PortfolioDbContext>(options =>
+{
+    options.UseNpgsql(connectionString);
+});
 
-// ✅ Add services
+// --------------------------------------------------
+// SERVICES
+// --------------------------------------------------
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// --------------------------------------------------
+// BUILD APP
+// --------------------------------------------------
 var app = builder.Build();
 
-// ✅ Auto-create DB (safe for small projects)
+// --------------------------------------------------
+// AUTO CREATE DATABASE (IMPORTANT FOR RENDER)
+// --------------------------------------------------
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<PortfolioDbContext>();
     db.Database.EnsureCreated();
 }
 
-// ✅ Middleware
+// --------------------------------------------------
+// MIDDLEWARE
+// --------------------------------------------------
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -37,7 +49,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
 app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();
