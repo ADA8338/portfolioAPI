@@ -1,59 +1,125 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using System.Text;
 using PortfolioAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// -------------------- SERVICES --------------------
+#region Database (PostgreSQL)
 
-// Database (PostgreSQL)
-builder.Services.AddDbContext<PortfolioDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("DefaultConnection")
-    )
+// Read connection string from ENV (Render)
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new Exception("Database connection string not found.");
+}
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(connectionString)
 );
 
-// Controllers
+#endregion
+
+#region Controllers
 builder.Services.AddControllers();
+#endregion
 
-// Swagger
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+#region JWT Authentication
 
-// CORS (safe default – frontend friendly)
-builder.Services.AddCors(options =>
+var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+
+if (string.IsNullOrEmpty(jwtKey) || string.IsNullOrEmpty(jwtIssuer))
 {
-    options.AddPolicy("AllowAll", policy =>
+    throw new Exception("JWT configuration missing.");
+}
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false; // IMPORTANT for Render
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        policy.AllowAnyOrigin()
-              .AllowAnyHeader()
-              .AllowAnyMethod();
+        ValidateIssuer = true,
+        ValidateAudience = false,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtKey)
+        )
+    };
+});
+
+#endregion
+
+#region Swagger + JWT Support
+
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Portfolio API",
+        Version = "v1"
+    });
+
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter: Bearer {your JWT token}"
+    });
+
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            new string[] {}
+        }
     });
 });
 
-// -------------------- APP --------------------
+#endregion
 
 var app = builder.Build();
 
-// Apply EF Core migrations safely (NO EnsureCreated)
-using (var scope = app.Services.CreateScope())
+#region Middleware
+
+// ❌ DO NOT use EnsureCreated or Migrate on Render
+// Database should already exist (external DB)
+
+if (app.Environment.IsDevelopment())
 {
-    var db = scope.ServiceProvider.GetRequiredService<PortfolioDbContext>();
-    db.Database.Migrate();
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
-// Swagger (keep enabled in prod for API testing)
-app.UseSwagger();
-app.UseSwaggerUI();
+// Render handles HTTPS externally
+// app.UseHttpsRedirection(); ❌ DO NOT enable
 
-// Middlewares
-app.UseHttpsRedirection();
-
-app.UseCors("AllowAll");
-
+app.UseAuthentication();
 app.UseAuthorization();
 
-// Map controllers
 app.MapControllers();
 
-// Port binding for Render
+#endregion
+
 app.Run();
