@@ -1,3 +1,4 @@
+using BCrypt.Net;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PortfolioAPI.Data;
